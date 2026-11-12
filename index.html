@@ -8,83 +8,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Chart.js CDN (Grafik için) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- Firebase App (v10) ve Firestore SDK -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyBhzj4a7ba1dfRWarASSLp_v5zxRxNRI1M",
-            authDomain: "hasanefendipanel.firebaseapp.com",
-            projectId: "hasanefendipanel",
-            storageBucket: "hasanefendipanel.firebasestorage.app",
-            messagingSenderId: "631333579124",
-            appId: "1:631333579124:web:ec21ebb332e86713c9a421",
-            measurementId: "G-2TNZF3RZ0F"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
-        function getTodayDate() {
-            return new Date().toISOString().split('T')[0];
-        }
-
-        function getAddedDaysDate(dateStr, days) {
-            let d = new Date(dateStr);
-            d.setDate(d.getDate() + days);
-            return d.toISOString().split('T')[0];
-        }
-
-        function isSpecialProduct(name) {
-            const specialItems = ['San Sebastian', 'Levain Cookie', 'Triple Choco Cookie'];
-            return specialItems.includes(name);
-        }
-
-        window.products = [];
-        window.archive = [];
-        window.manualCosts = [];
-
-        // Firestore'dan Anlık Veri Dinleme
-        onSnapshot(doc(db, "cafe_data", "hasanefendi"), (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                window.products = data.products || [];
-                window.archive = data.archive || [];
-                window.manualCosts = data.manualCosts || [];
-            } else {
-                window.products = [
-                    { id: 1, name: 'İbiza', stock: 8, sold: 4, price: 90.00, arrivalDate: getTodayDate(), date: getAddedDaysDate(getTodayDate(), 1), hasSkt: true },
-                    { id: 2, name: 'Afitap', stock: 5, sold: 3, price: 110.00, arrivalDate: getTodayDate(), date: getAddedDaysDate(getTodayDate(), 1), hasSkt: true },
-                    { id: 3, name: 'San Sebastian', stock: 4, sold: 4, price: 130.00, arrivalDate: getTodayDate(), date: getAddedDaysDate(getTodayDate(), 2), hasSkt: true }
-                ];
-                window.archive = [];
-                window.manualCosts = [];
-                window.saveData();
-            }
-            if (typeof renderProducts === 'function') renderProducts();
-            if (document.getElementById('tab-cost') && !document.getElementById('tab-cost').classList.contains('hidden') && typeof renderCostReport === 'function') {
-                renderCostReport();
-            }
-            if (document.getElementById('tab-archive') && !document.getElementById('tab-archive').classList.contains('hidden') && typeof renderArchive === 'function') {
-                renderArchive();
-            }
-        });
-
-        // Firestore'a Veri Kaydetme
-        window.saveData = async function() {
-            try {
-                await setDoc(doc(db, "cafe_data", "hasanefendi"), {
-                    products: window.products,
-                    archive: window.archive,
-                    manualCosts: window.manualCosts
-                });
-            } catch (e) {
-                console.error("Kayıt hatası: ", e);
-            }
-        };
-    </script>
 </head>
 <body class="bg-slate-100 font-sans min-h-screen text-slate-800 flex flex-col justify-between">
 
@@ -312,8 +235,29 @@
         Geliştirici: Hüseyin Güçlü
     </footer>
 
-    <!-- Uygulama İşlevleri -->
-    <script>
+    <!-- Firebase Firestore ve Kesin Senkronizasyon Mantığı -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBhzj4a7ba1dfRWarASSLp_v5zxRxNRI1M",
+            authDomain: "hasanefendipanel.firebaseapp.com",
+            projectId: "hasanefendipanel",
+            storageBucket: "hasanefendipanel.firebasestorage.app",
+            messagingSenderId: "631333579124",
+            appId: "1:631333579124:web:ec21ebb332e86713c9a421",
+            measurementId: "G-2TNZF3RZ0F"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        window.products = [];
+        window.archive = [];
+        window.manualCosts = [];
+        let wasteChartInstance = null;
+
         function getTodayDate() {
             return new Date().toISOString().split('T')[0];
         }
@@ -324,6 +268,56 @@
             return d.toISOString().split('T')[0];
         }
 
+        function isSpecialProduct(name) {
+            const specialItems = ['San Sebastian', 'Levain Cookie', 'Triple Choco Cookie'];
+            return specialItems.includes(name);
+        }
+
+        // Firestore'a Veri Kaydetme (Garantili)
+        window.saveData = async function() {
+            try {
+                await setDoc(doc(db, "cafe_data", "hasanefendi"), {
+                    products: window.products,
+                    archive: window.archive,
+                    manualCosts: window.manualCosts
+                }, { merge: true });
+            } catch (e) {
+                console.error("Kayıt hatası: ", e);
+            }
+        };
+
+        // Verileri Firestore'dan Yükleme (Sayfa Yenilendiğinde Silinmeme Garantisi)
+        async function loadData() {
+            try {
+                const docRef = doc(db, "cafe_data", "hasanefendi");
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    window.products = data.products || [];
+                    window.archive = data.archive || [];
+                    window.manualCosts = data.manualCosts || [];
+                } else {
+                    window.products = [
+                        { id: 1, name: 'İbiza', stock: 8, sold: 4, price: 90.00, arrivalDate: getTodayDate(), date: getAddedDaysDate(getTodayDate(), 1), hasSkt: true },
+                        { id: 2, name: 'Afitap', stock: 5, sold: 3, price: 110.00, arrivalDate: getTodayDate(), date: getAddedDaysDate(getTodayDate(), 1), hasSkt: true },
+                        { id: 3, name: 'San Sebastian', stock: 4, sold: 4, price: 130.00, arrivalDate: getTodayDate(), date: getAddedDaysDate(getTodayDate(), 2), hasSkt: true }
+                    ];
+                    window.archive = [];
+                    window.manualCosts = [];
+                    await window.saveData();
+                }
+                renderProducts();
+                if(document.getElementById('tab-cost') && !document.getElementById('tab-cost').classList.contains('hidden')) {
+                    renderCostReport();
+                }
+                if(document.getElementById('tab-archive') && !document.getElementById('tab-archive').classList.contains('hidden')) {
+                    renderArchive();
+                }
+            } catch (e) {
+                console.error("Veri yükleme hatası:", e);
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             const today = getTodayDate();
             const arrivalInput = document.getElementById('p-arrival-date');
@@ -331,9 +325,10 @@
             if(arrivalInput) arrivalInput.value = today;
             if(manualDateInput) manualDateInput.value = today;
             updateDefaultSKT();
+            loadData(); // Sayfa açıldığında verileri buluttan çek
         });
 
-        function toggleSKTField() {
+        window.toggleSKTField = function() {
             const noSktChecked = document.getElementById('no-skt-checkbox').checked;
             const dateInput = document.getElementById('p-date');
             if (noSktChecked) {
@@ -347,7 +342,7 @@
             }
         }
 
-        function updateDefaultSKT() {
+        window.updateDefaultSKT = function() {
             const noSktChecked = document.getElementById('no-skt-checkbox').checked;
             if (noSktChecked) return;
 
@@ -363,11 +358,11 @@
             }
         }
 
-        function handleProductSelection() {
+        window.handleProductSelection = function() {
             updateDefaultSKT();
         }
 
-        function switchTab(tab) {
+        window.switchTab = function(tab) {
             const activeTab = document.getElementById('tab-active');
             const costTab = document.getElementById('tab-cost');
             const archiveTab = document.getElementById('tab-archive');
@@ -399,7 +394,7 @@
             }
         }
 
-        function addProduct(e) {
+        window.addProduct = async function(e) {
             e.preventDefault();
             const name = document.getElementById('p-name').value.trim();
             const stock = parseInt(document.getElementById('p-stock').value);
@@ -420,7 +415,7 @@
             };
 
             window.products.push(newProduct);
-            window.saveData();
+            await window.saveData();
             renderProducts();
             document.getElementById('product-form').reset();
             
@@ -431,13 +426,13 @@
             updateDefaultSKT();
         }
 
-        function deleteProduct(id) {
+        window.deleteProduct = async function(id) {
             window.products = window.products.filter(p => p.id !== id);
-            window.saveData();
+            await window.saveData();
             renderProducts();
         }
 
-        function updateSoldQuantity(id, value) {
+        window.updateSoldQuantity = async function(id, value) {
             const product = window.products.find(p => p.id === id);
             if (product) {
                 let soldVal = parseInt(value) || 0;
@@ -445,7 +440,7 @@
                 if (soldVal > product.stock) soldVal = product.stock;
 
                 product.sold = soldVal;
-                window.saveData();
+                await window.saveData();
 
                 const wasteSpan = document.getElementById(`waste-span-${id}`);
                 const wasteCell = document.getElementById(`waste-cell-${id}`);
@@ -540,7 +535,7 @@
             });
         }
 
-        function sendWhatsAppCriticalReport() {
+        window.sendWhatsAppCriticalReport = function() {
             let criticalList = [];
             const todayStr = getTodayDate();
             window.products.forEach(p => {
@@ -562,7 +557,7 @@
             window.location.href = encodedUrl;
         }
 
-        function saveTodayToArchive() {
+        window.saveTodayToArchive = async function() {
             const todayStr = new Date().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' });
             let expiredItems = window.products.filter(p => p.hasSkt && getDaysLeft(p.date) <= 0);
 
@@ -580,13 +575,13 @@
             window.archive.unshift(archiveEntry);
             window.products = window.products.filter(p => !p.hasSkt || getDaysLeft(p.date) > 0);
 
-            window.saveData();
+            await window.saveData();
             renderProducts();
             alert(`"${todayStr}" arşivi oluşturuldu. Süresi dolan zayiler maliyete işlendi!`);
             switchTab('cost');
         }
 
-        function addManualCost(e) {
+        window.addManualCost = async function(e) {
             e.preventDefault();
             const date = document.getElementById('m-date').value;
             const name = document.getElementById('m-name').value.trim();
@@ -602,16 +597,16 @@
             };
 
             window.manualCosts.push(newCost);
-            window.saveData();
+            await window.saveData();
             renderCostReport();
             document.getElementById('manual-cost-form').reset();
             document.getElementById('m-date').value = getTodayDate();
             alert("Sistem dışı zayi maliyeti başarıyla eklendi!");
         }
 
-        function deleteManualCost(id) {
+        window.deleteManualCost = async function(id) {
             window.manualCosts = window.manualCosts.filter(c => c.id !== id);
-            window.saveData();
+            await window.saveData();
             renderCostReport();
         }
 
@@ -646,7 +641,7 @@
             return allCosts;
         }
 
-        function exportToCSV() {
+        window.exportToCSV = function() {
             let allCosts = getAllCosts();
             if (allCosts.length === 0) {
                 alert("Dışa aktarılacak zayi maliyet kaydı bulunmuyor.");
