@@ -1,781 +1,584 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hasan Efendi - Zayi & SKT Takip Paneli</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js CDN (Grafik için) -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body class="bg-slate-100 font-sans min-h-screen text-slate-800 flex flex-col justify-between">
+<!-- Firebase Modüler Kütüphaneleri (Head kısmına veya scriptin üstüne ekleyebilirsin) -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    <div class="max-w-7xl mx-auto px-4 py-8 w-full">
-        <!-- Üst Başlık -->
-        <header class="flex flex-col md:flex-row justify-between items-center mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 gap-4">
-            <div>
-                <h1 class="text-2xl font-bold text-slate-900">☕ Hasan Efendi - Zayi & SKT Takip Paneli</h1>
-                <p class="text-sm text-slate-500 mt-1">SKT Kontrollü Akıllı Arşiv ve Zayi Sistemi.</p>
-            </div>
-            <div class="flex flex-wrap gap-2">
-                <button onclick="switchTab('active')" id="btn-active" class="px-4 py-2 rounded-xl font-medium text-sm transition-all bg-indigo-600 text-white shadow-sm">Aktif Stok & Satış</button>
-                <button onclick="switchTab('cost')" id="btn-cost" class="px-4 py-2 rounded-xl font-medium text-sm transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">Aylık Zayi Maliyeti & Grafik</button>
-                <button onclick="switchTab('archive')" id="btn-archive" class="px-4 py-2 rounded-xl font-medium text-sm transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">Geçmiş Arşiv</button>
-            </div>
-        </header>
+    // 1. Firebase Bağlantı Ayarların (Kopyaladığın kod buraya geldi)
+    const firebaseConfig = {
+        apiKey: "AIzaSyBhzj4a7ba1dfRWarASSLp_v5zxRxNRI1M",
+        authDomain: "hasanefendipanel.firebaseapp.com",
+        projectId: "hasanefendipanel",
+        storageBucket: "hasanefendipanel.firebasestorage.app",
+        messagingSenderId: "631333579124",
+        appId: "1:631333579124:web:ec21ebb332e86713c9a421",
+        measurementId: "G-2TNZF3RZ0F"
+    };
 
-        <!-- SEKME 1: AKTİF STOK VE SATIŞ -->
-        <div id="tab-active" class="space-y-6">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Ürün Ekleme Formu -->
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 lg:col-span-1">
-                    <h2 class="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                        <span>➕</span> Otomatik / Manuel Ürün Ekle
-                    </h2>
-                    <form id="product-form" onsubmit="addProduct(event)" class="space-y-3">
-                        <div>
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Ürün / Tatlı Seçimi (Listeden Seç veya Yaz)</label>
-                            <input type="text" id="p-name" list="product-list" placeholder="Ürün seçin veya yazın..." required onchange="handleProductSelection()" oninput="handleProductSelection()" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
-                            <datalist id="product-list">
-                                <option value="Paris Brest">
-                                <option value="Cream Pita">
-                                <option value="Letafet">
-                                <option value="Afitap">
-                                <option value="Fig Cake">
-                                <option value="İbiza">
-                                <option value="Sufle">
-                                <option value="Nuty Caramel">
-                                <option value="Frambuazlı Cheesecake">
-                                <option value="San Sebastian">
-                                <option value="Browni">
-                                <option value="Tiramisu">
-                                <option value="Levain Cookie">
-                                <option value="Triple Choco Cookie">
-                                <option value="Afitap Kreması">
-                                <option value="Waffle Hamuru">
-                            </datalist>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Gelen Toplam Adet</label>
-                                <input type="number" id="p-stock" min="1" value="1" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Birim Fiyat (₺)</label>
-                                <input type="number" id="p-price" min="0" step="0.01" value="0" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Geliş Tarihi</label>
-                                <input type="date" id="p-arrival-date" required onchange="updateDefaultSKT()" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            </div>
-                            <div>
-                                <div class="flex justify-between items-center mb-1">
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500">SKT</label>
-                                    <label class="flex items-center gap-1 text-xs text-indigo-600 cursor-pointer font-medium">
-                                        <input type="checkbox" id="no-skt-checkbox" onchange="toggleSKTField()" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"> SKT Yok
-                                    </label>
-                                </div>
-                                <input type="date" id="p-date" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            </div>
-                        </div>
-                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors shadow-sm mt-2">
-                            Ürünü Listeye Ekle
-                        </button>
-                    </form>
-                </div>
+    // 2. Firebase ve Veritabanını Başlatma
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
 
-                <!-- Bilgi ve Gün Sonu İşlemi -->
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 lg:col-span-2 flex flex-col justify-between">
-                    <div>
-                        <h2 class="text-lg font-semibold text-slate-800 mb-2">💡 Akıllı Arşiv Kuralı</h2>
-                        <ul class="text-sm text-slate-600 space-y-2 list-disc list-inside">
-                            <li>Satılan adeti girdiğinizde kalan adet anında hesaplanır.</li>
-                            <li>Günün sonunda <strong class="text-emerald-600">"Günü Arşive Kaydet & Maliyete İşle"</strong> butonuna bastığınızda, **sadece son günü gelen (SKT'si dolan)** ürünler zayi maliyetine işlenir ve arşive alınır.</li>
-                            <li>SKT'si olmayan veya henüz dolmamış ürünler aktif listede kalmaya devam eder.</li>
-                        </ul>
-                    </div>
-                    <div class="mt-6 pt-4 border-t border-slate-100 flex flex-wrap gap-3 justify-between items-center">
-                        <button onclick="sendWhatsAppCriticalReport()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors shadow-sm flex items-center gap-2">
-                            <span>💬</span> Kritik Ürünleri WhatsApp'ta Paylaş
-                        </button>
-                        <button onclick="saveTodayToArchive()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-2.5 rounded-xl text-sm transition-colors shadow-sm flex items-center gap-2">
-                            <span>📁</span> Günü Arşive Kaydet & Maliyete İşle
-                        </button>
-                    </div>
-                </div>
-            </div>
+    function getTodayDate() {
+        return new Date().toISOString().split('T')[0];
+    }
 
-            <!-- Ürün Listesi Tablosu -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-                    <h2 class="text-lg font-semibold text-slate-800">📋 Hasan Efendi - Aktif Stok Takip Paneli</h2>
-                    <span id="product-count" class="text-xs font-medium bg-slate-100 text-slate-600 px-3 py-1 rounded-full">0 Ürün</span>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="bg-slate-50 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
-                                <th class="py-3 px-6 font-semibold">Ürün Adı</th>
-                                <th class="py-3 px-6 font-semibold">Gelen Stok</th>
-                                <th class="py-3 px-6 font-semibold text-emerald-700">Satılan Adet</th>
-                                <th class="py-3 px-6 font-semibold text-rose-700">Kalan / Risk</th>
-                                <th class="py-3 px-6 font-semibold">Birim Fiyat</th>
-                                <th class="py-3 px-6 font-semibold">SKT</th>
-                                <th class="py-3 px-6 font-semibold">Kalan Süre</th>
-                                <th class="py-3 px-6 font-semibold text-right">İşlemler</th>
-                            </tr>
-                        </thead>
-                        <tbody id="product-table-body" class="divide-y divide-slate-100 text-sm">
-                            <!-- JS ile dolacak -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+    function getAddedDaysDate(dateStr, days) {
+        let d = new Date(dateStr);
+        d.setDate(d.getDate() + days);
+        return d.toISOString().split('T')[0];
+    }
 
-        <!-- SEKME 2: AYLIK ZAYİ MALİYETİ & GRAFİK -->
-        <div id="tab-cost" class="space-y-6 hidden">
-            <!-- Tek Grafik Kartı (Detaylı Tooltip Eklendi) -->
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <h2 class="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                    <span>📊</span> Tatlı Bazlı Zayi Adet ve Maliyet Analizi (Grafik)
-                </h2>
-                <div class="w-full h-80 flex items-center justify-center">
-                    <canvas id="wasteChart"></canvas>
-                </div>
-            </div>
+    function isSpecialProduct(name) {
+        const specialItems = ['San Sebastian', 'Levain Cookie', 'Triple Choco Cookie'];
+        return specialItems.includes(name);
+    }
 
-            <!-- Geçmişe / Dışarıdan Zayi Ekleme Paneli -->
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <h2 class="text-lg font-semibold text-slate-800 mb-1 flex items-center gap-2">
-                    <span>➕</span> Sistem Dışı / Özel Ürün Zayi ve Maliyet Ekleme
-                </h2>
-                <p class="text-sm text-slate-500 mb-4">Listede olmayan herhangi bir ürünü veya malzemeyi doğrudan zayi maliyetine ekleyebilirsiniz.</p>
-                <form id="manual-cost-form" onsubmit="addManualCost(event)" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Zayi Tarihi</label>
-                        <input type="date" id="m-date" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Ürün / Malzeme Adı</label>
-                        <input type="text" id="m-name" placeholder="Örn: Özel Kahve Şurubu" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Zayi Adet</label>
-                        <input type="number" id="m-stock" min="1" value="1" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Birim Fiyat (₺)</label>
-                        <input type="number" id="m-price" min="0" step="0.01" value="90.00" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    </div>
-                    <div>
-                        <button type="submit" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors shadow-sm">
-                            Zayi Maliyeti Ekle
-                        </button>
-                    </div>
-                </form>
-            </div>
+    let products = [];
+    let archive = [];
+    let manualCosts = [];
+    let wasteChartInstance = null;
 
-            <!-- Maliyet Listesi ve Excel İndir -->
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                    <div>
-                        <h2 class="text-lg font-semibold text-slate-800">💸 Aylık Zayi Maliyet Raporu</h2>
-                        <p class="text-sm text-slate-500">Sadece son günü dolmuş ve zayi olmuş ürünlerin maliyet dökümü.</p>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-3">
-                        <button onclick="exportToCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2.5 rounded-xl text-sm transition-colors shadow-sm flex items-center gap-2">
-                            <span>📥</span> Excel / CSV İndir
-                        </button>
-                        <div class="bg-indigo-50 border border-indigo-100 px-5 py-2.5 rounded-2xl flex items-center gap-3">
-                            <span class="text-xs font-bold uppercase tracking-wider text-indigo-600">Toplam Zayi Maliyeti:</span>
-                            <span id="total-monthly-cost" class="text-xl font-extrabold text-indigo-700">0.00 ₺</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="bg-slate-50 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
-                                <th class="py-3 px-6 font-semibold">Tarih</th>
-                                <th class="py-3 px-6 font-semibold">Ürün Adı</th>
-                                <th class="py-3 px-6 font-semibold">Zayi Adet</th>
-                                <th class="py-3 px-6 font-semibold">Birim Fiyat</th>
-                                <th class="py-3 px-6 font-semibold">Toplam Tutar</th>
-                                <th class="py-3 px-6 font-semibold text-right">İşlem</th>
-                            </tr>
-                        </thead>
-                        <tbody id="cost-table-body" class="divide-y divide-slate-100 text-sm">
-                            <!-- JS ile dolacak -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- SEKME 3: GEÇMİŞ ARŞİV -->
-        <div id="tab-archive" class="space-y-6 hidden">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <h2 class="text-lg font-semibold text-slate-800 mb-2">📅 Geçmiş Günlerin Rapor Arşivi</h2>
-                <p class="text-sm text-slate-500 mb-6">Önceki günlerde süresi dolup arşive aktarılan zayi raporları.</p>
-                
-                <div id="archive-container" class="space-y-4">
-                    <!-- JS ile dolacak -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Alt Bilgi / Geliştirici İmzası -->
-    <footer class="max-w-7xl mx-auto px-4 py-4 w-full text-right text-xs text-slate-400 font-medium">
-        Geliştirici: Hüseyin Güçlü
-    </footer>
-
-    <script>
-        function getTodayDate() {
-            return new Date().toISOString().split('T')[0];
+    // 3. Buluttan Verileri Anlık Dinleme (Realtime Sync)
+    onValue(ref(db, 'hasanefendi_cafe'), (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            products = data.products || [];
+            archive = data.archive || [];
+            manualCosts = data.manualCosts || [];
+        } else {
+            products = [
+                { id: 1, name: 'İbiza', stock: 8, sold: 4, price: 90.00, arrivalDate: getTodayDate(), date: getAddedDaysDate(getTodayDate(), 1), hasSkt: true },
+                { id: 2, name: 'Afitap', stock: 5, sold: 3, price: 110.00, arrivalDate: getTodayDate(), date: getAddedDaysDate(getTodayDate(), 1), hasSkt: true },
+                { id: 3, name: 'San Sebastian', stock: 4, sold: 4, price: 130.00, arrivalDate: getTodayDate(), date: getAddedDaysDate(getTodayDate(), 2), hasSkt: true }
+            ];
+            archive = [];
+            manualCosts = [];
+            saveData();
         }
-
-        function getAddedDaysDate(dateStr, days) {
-            let d = new Date(dateStr);
-            d.setDate(d.getDate() + days);
-            return d.toISOString().split('T')[0];
+        renderProducts();
+        if(document.getElementById('tab-cost') && !document.getElementById('tab-cost').classList.contains('hidden')) {
+            renderCostReport();
         }
-
-        function isSpecialProduct(name) {
-            const specialItems = ['San Sebastian', 'Levain Cookie', 'Triple Choco Cookie'];
-            return specialItems.includes(name);
+        if(document.getElementById('tab-archive') && !document.getElementById('tab-archive').classList.contains('hidden')) {
+            renderArchive();
         }
+    });
 
-        let products = JSON.parse(localStorage.getItem('hasanefendi_products_v14')) || [
-            { id: 1, name: 'İbiza', stock: 8, sold: 4, price: 90.00, arrivalDate: getTodayDate(), date: getAddedDaysDate(getTodayDate(), 1), hasSkt: true },
-            { id: 2, name: 'Afitap', stock: 5, sold: 3, price: 110.00, arrivalDate: getTodayDate(), date: getAddedDaysDate(getTodayDate(), 1), hasSkt: true },
-            { id: 3, name: 'San Sebastian', stock: 4, sold: 4, price: 130.00, arrivalDate: getTodayDate(), date: getAddedDaysDate(getTodayDate(), 2), hasSkt: true }
-        ];
+    // 4. Verileri Buluta Kaydetme Fonksiyonu
+    window.saveData = function() {
+        set(ref(db, 'hasanefendi_cafe'), {
+            products: products,
+            archive: archive,
+            manualCosts: manualCosts
+        });
+    }
 
-        let archive = JSON.parse(localStorage.getItem('hasanefendi_archive_v14')) || [];
-        let manualCosts = JSON.parse(localStorage.getItem('hasanefendi_manual_costs_v10')) || [];
-        let wasteChartInstance = null;
+    window.addEventListener('DOMContentLoaded', () => {
+        const today = getTodayDate();
+        const arrivalInput = document.getElementById('p-arrival-date');
+        const manualDateInput = document.getElementById('m-date');
+        if(arrivalInput) arrivalInput.value = today;
+        if(manualDateInput) manualDateInput.value = today;
+        updateDefaultSKT();
+    });
 
-        function saveData() {
-            localStorage.setItem('hasanefendi_products_v14', JSON.stringify(products));
-            localStorage.setItem('hasanefendi_archive_v14', JSON.stringify(archive));
-            localStorage.setItem('hasanefendi_manual_costs_v10', JSON.stringify(manualCosts));
-        }
-
-        window.addEventListener('DOMContentLoaded', () => {
-            const today = getTodayDate();
-            const arrivalInput = document.getElementById('p-arrival-date');
-            const manualDateInput = document.getElementById('m-date');
-            if(arrivalInput) arrivalInput.value = today;
-            if(manualDateInput) manualDateInput.value = today;
+    window.toggleSKTField = function() {
+        const noSktChecked = document.getElementById('no-skt-checkbox').checked;
+        const dateInput = document.getElementById('p-date');
+        if (noSktChecked) {
+            dateInput.value = '';
+            dateInput.disabled = true;
+            dateInput.className = "w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-slate-100 text-slate-400 cursor-not-allowed";
+        } else {
+            dateInput.disabled = false;
+            dateInput.className = "w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
             updateDefaultSKT();
+        }
+    }
+
+    window.updateDefaultSKT = function() {
+        const noSktChecked = document.getElementById('no-skt-checkbox').checked;
+        if (noSktChecked) return;
+
+        const arrivalInput = document.getElementById('p-arrival-date');
+        const nameInput = document.getElementById('p-name');
+        const dateInput = document.getElementById('p-date');
+        
+        if(arrivalInput && dateInput) {
+            const arrivalVal = arrivalInput.value;
+            const selectedName = nameInput ? nameInput.value : '';
+            const addDays = isSpecialProduct(selectedName) ? 2 : 1;
+            dateInput.value = getAddedDaysDate(arrivalVal, addDays);
+        }
+    }
+
+    window.handleProductSelection = function() {
+        updateDefaultSKT();
+    }
+
+    window.switchTab = function(tab) {
+        const activeTab = document.getElementById('tab-active');
+        const costTab = document.getElementById('tab-cost');
+        const archiveTab = document.getElementById('tab-archive');
+        
+        const btnActive = document.getElementById('btn-active');
+        const btnCost = document.getElementById('btn-cost');
+        const btnArchive = document.getElementById('btn-archive');
+
+        activeTab.classList.add('hidden');
+        costTab.classList.add('hidden');
+        archiveTab.classList.add('hidden');
+
+        btnActive.className = "px-4 py-2 rounded-xl font-medium text-sm transition-all bg-slate-100 text-slate-600 hover:bg-slate-200";
+        btnCost.className = "px-4 py-2 rounded-xl font-medium text-sm transition-all bg-slate-100 text-slate-600 hover:bg-slate-200";
+        btnArchive.className = "px-4 py-2 rounded-xl font-medium text-sm transition-all bg-slate-100 text-slate-600 hover:bg-slate-200";
+
+        if (tab === 'active') {
+            activeTab.classList.remove('hidden');
+            btnActive.className = "px-4 py-2 rounded-xl font-medium text-sm transition-all bg-indigo-600 text-white shadow-sm";
+            renderProducts();
+        } else if (tab === 'cost') {
+            costTab.classList.remove('hidden');
+            btnCost.className = "px-4 py-2 rounded-xl font-medium text-sm transition-all bg-indigo-600 text-white shadow-sm";
+            renderCostReport();
+        } else {
+            archiveTab.classList.remove('hidden');
+            btnArchive.className = "px-4 py-2 rounded-xl font-medium text-sm transition-all bg-indigo-600 text-white shadow-sm";
+            renderArchive();
+        }
+    }
+
+    window.addProduct = function(e) {
+        e.preventDefault();
+        const name = document.getElementById('p-name').value.trim();
+        const stock = parseInt(document.getElementById('p-stock').value);
+        const price = parseFloat(document.getElementById('p-price').value);
+        const arrivalDate = document.getElementById('p-arrival-date').value;
+        const hasSkt = !document.getElementById('no-skt-checkbox').checked;
+        const date = hasSkt ? document.getElementById('p-date').value : 'SKT Yok';
+
+        const newProduct = {
+            id: Date.now(),
+            name,
+            stock,
+            sold: 0,
+            price,
+            arrivalDate,
+            date,
+            hasSkt
+        };
+
+        products.push(newProduct);
+        saveData();
+        renderProducts();
+        document.getElementById('product-form').reset();
+        
+        const today = getTodayDate();
+        document.getElementById('p-arrival-date').value = today;
+        document.getElementById('no-skt-checkbox').checked = false;
+        toggleSKTField();
+        updateDefaultSKT();
+    }
+
+    window.deleteProduct = function(id) {
+        products = products.filter(p => p.id !== id);
+        saveData();
+        renderProducts();
+    }
+
+    window.updateSoldQuantity = function(id, value) {
+        const product = products.find(p => p.id === id);
+        if (product) {
+            let soldVal = parseInt(value) || 0;
+            if (soldVal < 0) soldVal = 0;
+            if (soldVal > product.stock) soldVal = product.stock;
+
+            product.sold = soldVal;
+            saveData();
+
+            const wasteSpan = document.getElementById(`waste-span-${id}`);
+            const wasteCell = document.getElementById(`waste-cell-${id}`);
+            const calculatedWaste = product.stock - product.sold;
+            
+            if (wasteSpan) {
+                wasteSpan.innerText = `${calculatedWaste} adet`;
+                if (calculatedWaste > 0) {
+                    wasteCell.className = "px-3 py-1.5 rounded-xl text-sm font-bold bg-rose-100 text-rose-700 inline-block";
+                } else {
+                    wasteCell.className = "px-3 py-1.5 rounded-xl text-sm font-bold bg-slate-100 text-slate-500 inline-block";
+                }
+            }
+        }
+    }
+
+    function getDaysLeft(dateStr) {
+        if (dateStr === 'SKT Yok') return 999;
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const targetDate = new Date(dateStr);
+        targetDate.setHours(0,0,0,0);
+        const diffTime = targetDate - today;
+        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    function renderProducts() {
+        const tbody = document.getElementById('product-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        document.getElementById('product-count').innerText = `${products.length} Ürün`;
+
+        if (products.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-slate-400">Henüz kayıtlı ürün bulunmuyor.</td></tr>`;
+            return;
+        }
+
+        const todayStr = getTodayDate();
+
+        products.forEach(p => {
+            const waste = p.stock - p.sold;
+            const daysLeft = getDaysLeft(p.date);
+            let badgeClass = "";
+            let badgeText = "";
+            let isCritical = false;
+
+            if (!p.hasSkt) {
+                badgeClass = "bg-slate-100 text-slate-600 font-medium";
+                badgeText = "SKT Yok";
+            } else if (p.arrivalDate === todayStr) {
+                badgeClass = "bg-emerald-100 text-emerald-800 font-medium";
+                badgeText = "Bugün geldi";
+            } else if (isSpecialProduct(p.name) && daysLeft === 1) {
+                badgeClass = "bg-amber-100 text-amber-800 font-semibold";
+                badgeText = "1 gün kaldı";
+                isCritical = true;
+            } else {
+                badgeClass = "bg-rose-100 text-rose-800 font-bold";
+                badgeText = "Son günü";
+                isCritical = true;
+            }
+
+            const rowBg = isCritical ? "bg-rose-50/40 hover:bg-rose-50/70" : "hover:bg-slate-50/50";
+
+            const tr = document.createElement('tr');
+            tr.className = `transition-colors border-b border-slate-100 ${rowBg}`;
+            tr.innerHTML = `
+                <td class="py-4 px-6 font-medium text-slate-900">${p.name}</td>
+                <td class="py-4 px-6 font-semibold text-slate-700">${p.stock} adet</td>
+                <td class="py-4 px-6">
+                    <input type="number" min="0" max="${p.stock}" value="${p.sold}" oninput="updateSoldQuantity(${p.id}, this.value)" class="w-20 px-2.5 py-1.5 border border-emerald-300 rounded-xl text-sm font-semibold text-emerald-700 bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </td>
+                <td class="py-4 px-6">
+                    <span id="waste-cell-${p.id}" class="px-3 py-1.5 rounded-xl text-sm font-bold ${waste > 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'} inline-block">
+                        <span id="waste-span-${p.id}">${waste} adet</span>
+                    </span>
+                </td>
+                <td class="py-4 px-6 text-slate-600 font-semibold">${p.price.toFixed(2)} ₺</td>
+                <td class="py-4 px-6 text-slate-600 font-medium">${p.date}</td>
+                <td class="py-4 px-6">
+                    <span class="px-2.5 py-1 rounded-lg text-xs ${badgeClass}">
+                        ${badgeText}
+                    </span>
+                </td>
+                <td class="py-4 px-6 text-right">
+                    <button onclick="deleteProduct(${p.id})" class="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg transition-colors" title="Ürünü Sil">
+                        🗑️
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    window.sendWhatsAppCriticalReport = function() {
+        let criticalList = [];
+        const todayStr = getTodayDate();
+        products.forEach(p => {
+            if (!p.hasSkt) return;
+            const waste = p.stock - p.sold;
+            const daysLeft = getDaysLeft(p.date);
+            if (p.arrivalDate !== todayStr && (daysLeft <= 0 || (isSpecialProduct(p.name) && daysLeft <= 1))) {
+                criticalList.push(`- ${p.name}: Gelen ${p.stock} | Satılan ${p.sold} | Oto Zayi ${waste} (${daysLeft <= 0 ? 'Son günü' : '1 gün kaldı'})`);
+            }
         });
 
-        function toggleSKTField() {
-            const noSktChecked = document.getElementById('no-skt-checkbox').checked;
-            const dateInput = document.getElementById('p-date');
-            if (noSktChecked) {
-                dateInput.value = '';
-                dateInput.disabled = true;
-                dateInput.className = "w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-slate-100 text-slate-400 cursor-not-allowed";
-            } else {
-                dateInput.disabled = false;
-                dateInput.className = "w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
-                updateDefaultSKT();
+        if (criticalList.length === 0) {
+            alert("Harika! Şu an kritik veya süresi geçen ürün bulunmuyor.");
+            return;
+        }
+
+        let message = `☕ *Hasan Efendi - Kritik SKT & Satış Bildirimi*\n\nDikkat gerektiren ürünler:\n` + criticalList.join('\n') + `\n\nLütfen gerekli aksiyonu alınız!`;
+        let encodedUrl = `https://wa.me/?text=` + encodeURIComponent(message);
+        window.location.href = encodedUrl;
+    }
+
+    window.saveTodayToArchive = function() {
+        const todayStr = new Date().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' });
+        let expiredItems = products.filter(p => p.hasSkt && getDaysLeft(p.date) <= 0);
+
+        if (expiredItems.length === 0) {
+            alert("Bugün süresi dolan ürün bulunmuyor. Vakti olanlar aktif stokta kalmaya devam ediyor.");
+            return;
+        }
+
+        const archiveEntry = {
+            dateStr: todayStr,
+            timestamp: new Date().getTime(),
+            items: JSON.parse(JSON.stringify(expiredItems))
+        };
+
+        archive.unshift(archiveEntry);
+        products = products.filter(p => !p.hasSkt || getDaysLeft(p.date) > 0);
+
+        saveData();
+        renderProducts();
+        alert(`"${todayStr}" arşivi oluşturuldu. Süresi dolan zayiler maliyete işlendi!`);
+        switchTab('cost');
+    }
+
+    window.addManualCost = function(e) {
+        e.preventDefault();
+        const date = document.getElementById('m-date').value;
+        const name = document.getElementById('m-name').value.trim();
+        const stock = parseInt(document.getElementById('m-stock').value);
+        const price = parseFloat(document.getElementById('m-price').value);
+
+        const newCost = {
+            id: Date.now(),
+            date,
+            name,
+            stock,
+            price
+        };
+
+        manualCosts.push(newCost);
+        saveData();
+        renderCostReport();
+        document.getElementById('manual-cost-form').reset();
+        document.getElementById('m-date').value = getTodayDate();
+        alert("Sistem dışı zayi maliyeti başarıyla eklendi!");
+    }
+
+    window.deleteManualCost = function(id) {
+        manualCosts = manualCosts.filter(c => c.id !== id);
+        saveData();
+        renderCostReport();
+    }
+
+    function getAllCosts() {
+        let allCosts = [];
+        archive.forEach(arch => {
+            arch.items.forEach(item => {
+                const waste = item.stock - item.sold;
+                if (waste > 0) {
+                    allCosts.push({
+                        id: 'arch_' + item.id,
+                        dateStr: arch.dateStr,
+                        name: item.name,
+                        stock: waste,
+                        price: item.price,
+                        isManual: false
+                    });
+                }
+            });
+        });
+
+        manualCosts.forEach(c => {
+            allCosts.push({
+                id: c.id,
+                dateStr: c.date,
+                name: c.name,
+                stock: c.stock,
+                price: c.price,
+                isManual: true
+            });
+        });
+        return allCosts;
+    }
+
+    window.exportToCSV = function() {
+        let allCosts = getAllCosts();
+        if (allCosts.length === 0) {
+            alert("Dışa aktarılacak zayi maliyet kaydı bulunmuyor.");
+            return;
+        }
+
+        let csvContent = "\uFEFFTarih;Ürün Adı;Zayi Adet;Birim Fiyat (TL);Toplam Tutar (TL)\n";
+        let total = 0;
+
+        allCosts.forEach(item => {
+            let itemTotal = item.stock * item.price;
+            total += itemTotal;
+            csvContent += `"${item.dateStr}";"${item.name}";${item.stock};${item.price.toFixed(2)};${itemTotal.toFixed(2)}\n`;
+        });
+
+        csvContent += `\n;;;TOPLAM ZAYİ MALİYETİ;${total.toFixed(2)}`;
+
+        let blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement('a');
+        a.setAttribute('href', url);
+        a.setAttribute('download', `Hasan_Efendi_Zayi_Raporu_${getTodayDate()}.csv`);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    function renderCostReport() {
+        const tbody = document.getElementById('cost-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        let totalCost = 0;
+        let allCosts = getAllCosts();
+        let productCostMap = {};
+        let productStockMap = {};
+
+        if (allCosts.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-400">Henüz zayi maliyeti bulunmuyor.</td></tr>`;
+            document.getElementById('total-monthly-cost').innerText = `0.00 ₺`;
+            renderWasteChart({}, {});
+            return;
+        }
+
+        allCosts.forEach(item => {
+            const itemTotal = item.stock * item.price;
+            totalCost += itemTotal;
+
+            if (!productCostMap[item.name]) {
+                productCostMap[item.name] = 0;
+                productStockMap[item.name] = 0;
             }
+            productCostMap[item.name] += itemTotal;
+            productStockMap[item.name] += item.stock;
+
+            const tr = document.createElement('tr');
+            tr.className = "border-b border-slate-100 hover:bg-slate-50/50 transition-colors";
+            tr.innerHTML = `
+                <td class="py-4 px-6 text-slate-600 font-medium">${item.dateStr}</td>
+                <td class="py-4 px-6 font-semibold text-slate-900">${item.name}</td>
+                <td class="py-4 px-6 text-slate-600">${item.stock} adet</td>
+                <td class="py-4 px-6 text-slate-600">${item.price.toFixed(2)} ₺</td>
+                <td class="py-4 px-6 font-extrabold text-rose-600">${itemTotal.toFixed(2)} ₺</td>
+                <td class="py-4 px-6 text-right">
+                    ${item.isManual ? `<button onclick="deleteManualCost(${item.id})" class="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg transition-colors" title="Sil">🗑️</button>` : `<span class="text-xs text-slate-400">Arşivden</span>`}
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('total-monthly-cost').innerText = `${totalCost.toFixed(2)} ₺`;
+        renderWasteChart(productCostMap, productStockMap);
+    }
+
+    function renderWasteChart(costMap, stockMap) {
+        const canvasEl = document.getElementById('wasteChart');
+        if (!canvasEl) return;
+        const ctx = canvasEl.getContext('2d');
+        
+        if (wasteChartInstance) {
+            wasteChartInstance.destroy();
         }
 
-        function updateDefaultSKT() {
-            const noSktChecked = document.getElementById('no-skt-checkbox').checked;
-            if (noSktChecked) return;
+        let labels = Object.keys(costMap);
+        let costValues = Object.values(costMap);
+        let stockValues = labels.map(label => stockMap[label] || 0);
 
-            const arrivalInput = document.getElementById('p-arrival-date');
-            const nameInput = document.getElementById('p-name');
-            const dateInput = document.getElementById('p-date');
-            
-            if(arrivalInput && dateInput) {
-                const arrivalVal = arrivalInput.value;
-                const selectedName = nameInput ? nameInput.value : '';
-                const addDays = isSpecialProduct(selectedName) ? 2 : 1;
-                dateInput.value = getAddedDaysDate(arrivalVal, addDays);
-            }
+        if (labels.length === 0) {
+            labels = ['Veri Yok'];
+            costValues = [0];
+            stockValues = [0];
         }
 
-        function handleProductSelection() {
-            updateDefaultSKT();
-        }
-
-        function switchTab(tab) {
-            const activeTab = document.getElementById('tab-active');
-            const costTab = document.getElementById('tab-cost');
-            const archiveTab = document.getElementById('tab-archive');
-            
-            const btnActive = document.getElementById('btn-active');
-            const btnCost = document.getElementById('btn-cost');
-            const btnArchive = document.getElementById('btn-archive');
-
-            activeTab.classList.add('hidden');
-            costTab.classList.add('hidden');
-            archiveTab.classList.add('hidden');
-
-            btnActive.className = "px-4 py-2 rounded-xl font-medium text-sm transition-all bg-slate-100 text-slate-600 hover:bg-slate-200";
-            btnCost.className = "px-4 py-2 rounded-xl font-medium text-sm transition-all bg-slate-100 text-slate-600 hover:bg-slate-200";
-            btnArchive.className = "px-4 py-2 rounded-xl font-medium text-sm transition-all bg-slate-100 text-slate-600 hover:bg-slate-200";
-
-            if (tab === 'active') {
-                activeTab.classList.remove('hidden');
-                btnActive.className = "px-4 py-2 rounded-xl font-medium text-sm transition-all bg-indigo-600 text-white shadow-sm";
-                renderProducts();
-            } else if (tab === 'cost') {
-                costTab.classList.remove('hidden');
-                btnCost.className = "px-4 py-2 rounded-xl font-medium text-sm transition-all bg-indigo-600 text-white shadow-sm";
-                renderCostReport();
-            } else {
-                archiveTab.classList.remove('hidden');
-                btnArchive.className = "px-4 py-2 rounded-xl font-medium text-sm transition-all bg-indigo-600 text-white shadow-sm";
-                renderArchive();
-            }
-        }
-
-        function addProduct(e) {
-            e.preventDefault();
-            const name = document.getElementById('p-name').value.trim();
-            const stock = parseInt(document.getElementById('p-stock').value);
-            const price = parseFloat(document.getElementById('p-price').value);
-            const arrivalDate = document.getElementById('p-arrival-date').value;
-            const hasSkt = !document.getElementById('no-skt-checkbox').checked;
-            const date = hasSkt ? document.getElementById('p-date').value : 'SKT Yok';
-
-            const newProduct = {
-                id: Date.now(),
-                name,
-                stock,
-                sold: 0,
-                price,
-                arrivalDate,
-                date,
-                hasSkt
-            };
-
-            products.push(newProduct);
-            saveData();
-            renderProducts();
-            document.getElementById('product-form').reset();
-            
-            const today = getTodayDate();
-            document.getElementById('p-arrival-date').value = today;
-            document.getElementById('no-skt-checkbox').checked = false;
-            toggleSKTField();
-            updateDefaultSKT();
-        }
-
-        function deleteProduct(id) {
-            products = products.filter(p => p.id !== id);
-            saveData();
-            renderProducts();
-        }
-
-        function updateSoldQuantity(id, value) {
-            const product = products.find(p => p.id === id);
-            if (product) {
-                let soldVal = parseInt(value) || 0;
-                if (soldVal < 0) soldVal = 0;
-                if (soldVal > product.stock) soldVal = product.stock;
-
-                product.sold = soldVal;
-                saveData();
-
-                const wasteSpan = document.getElementById(`waste-span-${id}`);
-                const wasteCell = document.getElementById(`waste-cell-${id}`);
-                const calculatedWaste = product.stock - product.sold;
-                
-                if (wasteSpan) {
-                    wasteSpan.innerText = `${calculatedWaste} adet`;
-                    if (calculatedWaste > 0) {
-                        wasteCell.className = "px-3 py-1.5 rounded-xl text-sm font-bold bg-rose-100 text-rose-700 inline-block";
-                    } else {
-                        wasteCell.className = "px-3 py-1.5 rounded-xl text-sm font-bold bg-slate-100 text-slate-500 inline-block";
+        wasteChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Zayi Maliyeti (₺)',
+                        data: costValues,
+                        backgroundColor: 'rgba(225, 29, 72, 0.7)',
+                        borderColor: 'rgb(225, 29, 72)',
+                        borderWidth: 1,
+                        borderRadius: 8
+                    },
+                    {
+                        label: 'Zayi Adet',
+                        data: stockValues,
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                        borderColor: 'rgb(59, 130, 246)',
+                        borderWidth: 1,
+                        borderRadius: 8
                     }
-                }
-            }
-        }
-
-        function getDaysLeft(dateStr) {
-            if (dateStr === 'SKT Yok') return 999;
-            const today = new Date();
-            today.setHours(0,0,0,0);
-            const targetDate = new Date(dateStr);
-            targetDate.setHours(0,0,0,0);
-            const diffTime = targetDate - today;
-            return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        }
-
-        function renderProducts() {
-            const tbody = document.getElementById('product-table-body');
-            tbody.innerHTML = '';
-            document.getElementById('product-count').innerText = `${products.length} Ürün`;
-
-            if (products.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-slate-400">Henüz kayıtlı ürün bulunmuyor.</td></tr>`;
-                return;
-            }
-
-            const todayStr = getTodayDate();
-
-            products.forEach(p => {
-                const waste = p.stock - p.sold;
-                const daysLeft = getDaysLeft(p.date);
-                let badgeClass = "";
-                let badgeText = "";
-                let isCritical = false;
-
-                if (!p.hasSkt) {
-                    badgeClass = "bg-slate-100 text-slate-600 font-medium";
-                    badgeText = "SKT Yok";
-                } else if (p.arrivalDate === todayStr) {
-                    badgeClass = "bg-emerald-100 text-emerald-800 font-medium";
-                    badgeText = "Bugün geldi";
-                } else if (isSpecialProduct(p.name) && daysLeft === 1) {
-                    badgeClass = "bg-amber-100 text-amber-800 font-semibold";
-                    badgeText = "1 gün kaldı";
-                    isCritical = true;
-                } else {
-                    badgeClass = "bg-rose-100 text-rose-800 font-bold";
-                    badgeText = "Son günü";
-                    isCritical = true;
-                }
-
-                const rowBg = isCritical ? "bg-rose-50/40 hover:bg-rose-50/70" : "hover:bg-slate-50/50";
-
-                const tr = document.createElement('tr');
-                tr.className = `transition-colors border-b border-slate-100 ${rowBg}`;
-                tr.innerHTML = `
-                    <td class="py-4 px-6 font-medium text-slate-900">${p.name}</td>
-                    <td class="py-4 px-6 font-semibold text-slate-700">${p.stock} adet</td>
-                    <td class="py-4 px-6">
-                        <input type="number" min="0" max="${p.stock}" value="${p.sold}" oninput="updateSoldQuantity(${p.id}, this.value)" class="w-20 px-2.5 py-1.5 border border-emerald-300 rounded-xl text-sm font-semibold text-emerald-700 bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    </td>
-                    <td class="py-4 px-6">
-                        <span id="waste-cell-${p.id}" class="px-3 py-1.5 rounded-xl text-sm font-bold ${waste > 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'} inline-block">
-                            <span id="waste-span-${p.id}">${waste} adet</span>
-                        </span>
-                    </td>
-                    <td class="py-4 px-6 text-slate-600 font-semibold">${p.price.toFixed(2)} ₺</td>
-                    <td class="py-4 px-6 text-slate-600 font-medium">${p.date}</td>
-                    <td class="py-4 px-6">
-                        <span class="px-2.5 py-1 rounded-lg text-xs ${badgeClass}">
-                            ${badgeText}
-                        </span>
-                    </td>
-                    <td class="py-4 px-6 text-right">
-                        <button onclick="deleteProduct(${p.id})" class="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg transition-colors" title="Ürünü Sil">
-                            🗑️
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        // WhatsApp Kritik Rapor Gönderimi
-        function sendWhatsAppCriticalReport() {
-            let criticalList = [];
-            const todayStr = getTodayDate();
-            products.forEach(p => {
-                if (!p.hasSkt) return;
-                const waste = p.stock - p.sold;
-                const daysLeft = getDaysLeft(p.date);
-                if (p.arrivalDate !== todayStr && (daysLeft <= 0 || (isSpecialProduct(p.name) && daysLeft <= 1))) {
-                    criticalList.push(`- ${p.name}: Gelen ${p.stock} | Satılan ${p.sold} | Oto Zayi ${waste} (${daysLeft <= 0 ? 'Son günü' : '1 gün kaldı'})`);
-                }
-            });
-
-            if (criticalList.length === 0) {
-                alert("Harika! Şu an kritik veya süresi geçen ürün bulunmuyor.");
-                return;
-            }
-
-            let message = `☕ *Hasan Efendi - Kritik SKT & Satış Bildirimi*\n\nDikkat gerektiren ürünler:\n` + criticalList.join('\n') + `\n\nLütfen gerekli aksiyonu alınız!`;
-            let encodedUrl = `https://wa.me/?text=` + encodeURIComponent(message);
-            window.location.href = encodedUrl;
-        }
-
-        // GÜNÜ ARŞİVE KAYDET
-        function saveTodayToArchive() {
-            const todayStr = new Date().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' });
-            let expiredItems = products.filter(p => p.hasSkt && getDaysLeft(p.date) <= 0);
-
-            if (expiredItems.length === 0) {
-                alert("Bugün süresi dolan ürün bulunmuyor. Vakti olanlar aktif stokta kalmaya devam ediyor.");
-                return;
-            }
-
-            const archiveEntry = {
-                dateStr: todayStr,
-                timestamp: new Date().getTime(),
-                items: JSON.parse(JSON.stringify(expiredItems))
-            };
-
-            archive.unshift(archiveEntry);
-            products = products.filter(p => !p.hasSkt || getDaysLeft(p.date) > 0);
-
-            saveData();
-            renderProducts();
-            alert(`"${todayStr}" arşivi oluşturuldu. Süresi dolan zayiler maliyete işlendi!`);
-            switchTab('cost');
-        }
-
-        function addManualCost(e) {
-            e.preventDefault();
-            const date = document.getElementById('m-date').value;
-            const name = document.getElementById('m-name').value.trim();
-            const stock = parseInt(document.getElementById('m-stock').value);
-            const price = parseFloat(document.getElementById('m-price').value);
-
-            const newCost = {
-                id: Date.now(),
-                date,
-                name,
-                stock,
-                price
-            };
-
-            manualCosts.push(newCost);
-            saveData();
-            renderCostReport();
-            document.getElementById('manual-cost-form').reset();
-            document.getElementById('m-date').value = getTodayDate();
-            alert("Sistem dışı zayi maliyeti başarıyla eklendi!");
-        }
-
-        function deleteManualCost(id) {
-            manualCosts = manualCosts.filter(c => c.id !== id);
-            saveData();
-            renderCostReport();
-        }
-
-        function getAllCosts() {
-            let allCosts = [];
-            archive.forEach(arch => {
-                arch.items.forEach(item => {
-                    const waste = item.stock - item.sold;
-                    if (waste > 0) {
-                        allCosts.push({
-                            id: 'arch_' + item.id,
-                            dateStr: arch.dateStr,
-                            name: item.name,
-                            stock: waste,
-                            price: item.price,
-                            isManual: false
-                        });
-                    }
-                });
-            });
-
-            manualCosts.forEach(c => {
-                allCosts.push({
-                    id: c.id,
-                    dateStr: c.date,
-                    name: c.name,
-                    stock: c.stock,
-                    price: c.price,
-                    isManual: true
-                });
-            });
-            return allCosts;
-        }
-
-        // Excel / CSV Olarak Dışa Aktarma
-        function exportToCSV() {
-            let allCosts = getAllCosts();
-            if (allCosts.length === 0) {
-                alert("Dışa aktarılacak zayi maliyet kaydı bulunmuyor.");
-                return;
-            }
-
-            let csvContent = "\uFEFFTarih;Ürün Adı;Zayi Adet;Birim Fiyat (TL);Toplam Tutar (TL)\n";
-            let total = 0;
-
-            allCosts.forEach(item => {
-                let itemTotal = item.stock * item.price;
-                total += itemTotal;
-                csvContent += `"${item.dateStr}";"${item.name}";${item.stock};${item.price.toFixed(2)};${itemTotal.toFixed(2)}\n`;
-            });
-
-            csvContent += `\n;;;TOPLAM ZAYİ MALİYETİ;${total.toFixed(2)}`;
-
-            let blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            let url = URL.createObjectURL(blob);
-            let a = document.createElement('a');
-            a.setAttribute('href', url);
-            a.setAttribute('download', `Hasan_Efendi_Zayi_Raporu_${getTodayDate()}.csv`);
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        }
-
-        function renderCostReport() {
-            const tbody = document.getElementById('cost-table-body');
-            tbody.innerHTML = '';
-            let totalCost = 0;
-            let allCosts = getAllCosts();
-            let productCostMap = {};
-            let productStockMap = {};
-
-            if (allCosts.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-400">Henüz zayi maliyeti bulunmuyor.</td></tr>`;
-                document.getElementById('total-monthly-cost').innerText = `0.00 ₺`;
-                renderWasteChart({}, {});
-                return;
-            }
-
-            allCosts.forEach(item => {
-                const itemTotal = item.stock * item.price;
-                totalCost += itemTotal;
-
-                if (!productCostMap[item.name]) {
-                    productCostMap[item.name] = 0;
-                    productStockMap[item.name] = 0;
-                }
-                productCostMap[item.name] += itemTotal;
-                productStockMap[item.name] += item.stock;
-
-                const tr = document.createElement('tr');
-                tr.className = "border-b border-slate-100 hover:bg-slate-50/50 transition-colors";
-                tr.innerHTML = `
-                    <td class="py-4 px-6 text-slate-600 font-medium">${item.dateStr}</td>
-                    <td class="py-4 px-6 font-semibold text-slate-900">${item.name}</td>
-                    <td class="py-4 px-6 text-slate-600">${item.stock} adet</td>
-                    <td class="py-4 px-6 text-slate-600">${item.price.toFixed(2)} ₺</td>
-                    <td class="py-4 px-6 font-extrabold text-rose-600">${itemTotal.toFixed(2)} ₺</td>
-                    <td class="py-4 px-6 text-right">
-                        ${item.isManual ? `<button onclick="deleteManualCost(${item.id})" class="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg transition-colors" title="Sil">🗑️</button>` : `<span class="text-xs text-slate-400">Arşivden</span>`}
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-
-            document.getElementById('total-monthly-cost').innerText = `${totalCost.toFixed(2)} ₺`;
-            renderWasteChart(productCostMap, productStockMap);
-        }
-
-        // Tek Grafik Oluşturma (Gelişmiş Tooltip ile)
-        function renderWasteChart(costMap, stockMap) {
-            const ctx = document.getElementById('wasteChart').getContext('2d');
-            
-            if (wasteChartInstance) {
-                wasteChartInstance.destroy();
-            }
-
-            let labels = Object.keys(costMap);
-            let costValues = Object.values(costMap);
-            let stockValues = labels.map(label => stockMap[label] || 0);
-
-            if (labels.length === 0) {
-                labels = ['Veri Yok'];
-                costValues = [0];
-                stockValues = [0];
-            }
-
-            wasteChartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: 'Zayi Maliyeti (₺)',
-                            data: costValues,
-                            backgroundColor: 'rgba(225, 29, 72, 0.7)',
-                            borderColor: 'rgb(225, 29, 72)',
-                            borderWidth: 1,
-                            borderRadius: 8
-                        },
-                        {
-                            label: 'Zayi Adet',
-                            data: stockValues,
-                            backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                            borderColor: 'rgb(59, 130, 246)',
-                            borderWidth: 1,
-                            borderRadius: 8
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: true, position: 'top' },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    let value = context.parsed.y || 0;
-                                    if (label.includes('Maliyet')) {
-                                        return ` ${label}: ${value.toFixed(2)} ₺`;
-                                    } else {
-                                        return ` ${label}: ${value} adet`;
-                                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: true, position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                let value = context.parsed.y || 0;
+                                if (label.includes('Maliyet')) {
+                                    return ` ${label}: ${value.toFixed(2)} ₺`;
+                                } else {
+                                    return ` ${label}: ${value} adet`;
                                 }
                             }
                         }
+                    }
+                },
+                scales: {
+                    x: { 
+                        grid: { display: false },
+                        title: { display: true, text: 'Ürünler' }
                     },
-                    scales: {
-                        x: { 
-                            grid: { display: false },
-                            title: { display: true, text: 'Ürünler' }
-                        },
-                        y: { 
-                            beginAtZero: true, 
-                            grid: { color: '#f1f5f9' },
-                            title: { display: true, text: 'Miktar (₺ / Adet)' }
-                        }
+                    y: { 
+                        beginAtZero: true, 
+                        grid: { color: '#f1f5f9' },
+                        title: { display: true, text: 'Miktar (₺ / Adet)' }
                     }
                 }
-            });
+            }
+        });
+    }
+
+    function renderArchive() {
+        const container = document.getElementById('archive-container');
+        if (!container) return;
+        container.innerHTML = '';
+
+        if (archive.length === 0) {
+            container.innerHTML = `<p class="text-center py-8 text-slate-400">Henüz kaydedilmiş geçmiş gün raporu bulunmuyor.</p>`;
+            return;
         }
 
-        function renderArchive() {
-            const container = document.getElementById('archive-container');
-            container.innerHTML = '';
-
-            if (archive.length === 0) {
-                container.innerHTML = `<p class="text-center py-8 text-slate-400">Henüz kaydedilmiş geçmiş gün raporu bulunmuyor.</p>`;
-                return;
-            }
-
-            archive.forEach((arch) => {
-                let itemsHtml = '';
-                arch.items.forEach(item => {
-                    const waste = item.stock - item.sold;
-                    itemsHtml += `
-                        <div class="flex justify-between items-center py-2 px-3 bg-slate-50 rounded-lg text-sm">
-                            <span class="font-medium text-slate-800">${item.name} <span class="text-xs text-slate-500">(Gelen: ${item.stock} | Satılan: <b class="text-emerald-600">${item.sold}</b> | Zayi: <b class="text-rose-600">${waste}</b>)</span></span>
-                            <span class="px-2 py-0.5 rounded text-xs font-semibold ${waste > 0 ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">${waste > 0 ? waste + ' Adet Zayi' : 'Fire Yok'}</span>
-                        </div>
-                    `;
-                });
-
-                const div = document.createElement('div');
-                div.className = "border border-slate-200 rounded-2xl p-5 bg-white shadow-sm space-y-3";
-                div.innerHTML = `
-                    <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                        <h3 class="font-bold text-slate-800 text-base">🗓️ ${arch.dateStr} Raporu</h3>
-                        <span class="text-xs text-slate-400">${arch.items.length} ürün kalemi</span>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                        ${itemsHtml}
+        archive.forEach((arch) => {
+            let itemsHtml = '';
+            arch.items.forEach(item => {
+                const waste = item.stock - item.sold;
+                itemsHtml += `
+                    <div class="flex justify-between items-center py-2 px-3 bg-slate-50 rounded-lg text-sm">
+                        <span class="font-medium text-slate-800">${item.name} <span class="text-xs text-slate-500">(Gelen: ${item.stock} | Satılan: <b class="text-emerald-600">${item.sold}</b> | Zayi: <b class="text-rose-600">${waste}</b>)</span></span>
+                        <span class="px-2 py-0.5 rounded text-xs font-semibold ${waste > 0 ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">${waste > 0 ? waste + ' Adet Zayi' : 'Fire Yok'}</span>
                     </div>
                 `;
-                container.appendChild(div);
             });
-        }
 
-        renderProducts();
-    </script>
-</body>
-</html>
+            const div = document.createElement('div');
+            div.className = "border border-slate-200 rounded-2xl p-5 bg-white shadow-sm space-y-3";
+            div.innerHTML = `
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <h3 class="font-bold text-slate-800 text-base">🗓️ ${arch.dateStr} Raporu</h3>
+                    <span class="text-xs text-slate-400">${arch.items.length} ürün kalemi</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    ${itemsHtml}
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+</script>
